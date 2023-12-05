@@ -45,6 +45,8 @@
     </div>
     <canvas id="myCanvas" class="canvas" width="512" height="512"></canvas>
     <br>
+    <canvas id="myCanvas2" class="canvas" width="512" height="128"></canvas>
+    <br>
     <div id="tTest" class="tTest">tTest</div>
     <br>
     <p>
@@ -90,8 +92,8 @@
 
     const canvas = document.getElementById('myCanvas');
     const ctx = canvas.getContext("2d");
-    // const canvas2 = document.getElementById('myCanvas2');
-    // const ctx2 = canvas2.getContext("2d");
+    const canvas2 = document.getElementById('myCanvas2');
+    const ctx2 = canvas2.getContext("2d");
 
     // When the connection is open, set wsReady to true
     ws.onopen = function () {
@@ -99,7 +101,8 @@
     };
 
     let frame = 0;
-    let lastTimeT = Date.now();
+    let lastTimeT = 0;
+    let timesT = [];
     let aDelay = 0;
     // When a message is received from the server
     ws.onmessage = function (event) {
@@ -131,18 +134,39 @@
 
             frame++;
             // Update FPS every 100 frames
-            if (frame === 100) {
+            const CHECK_FRAME = 100;
+            if (frame === CHECK_FRAME) {
                 frame = 0;
                 const now = Date.now();
-                aDelay = (now - lastTimeT) / 100;
+                aDelay = (now - lastTimeT) / CHECK_FRAME;
+                if (lastTimeT !== 0) timesT.push(aDelay);// Dont push first
+                if (timesT.length > 32) {
+                    timesT.shift();// rm first element
+                }
                 lastTimeT = now;
             }
             const tDelay = parseFloat(document.getElementById('tOpts_delay').value);
+            
+            // Bar graph
+            var max = Math.max(...timesT);
+            var min = Math.min(...timesT);
+            var scale = (canvas2.height / (max - min));
+            var barWidth = canvas2.width / 32;
+            ctx2.clearRect(0,0, canvas2.width, canvas2.height);
+            ctx2.fillStyle = '#4285F4';
+            for (var i = 0; i < timesT.length; i++) {
+                var adjustedHeight = (timesT[i] - min) * scale;
+                ctx2.fillRect(i * barWidth, canvas2.height - adjustedHeight, barWidth, adjustedHeight);
+            }
+            
             // Text output
-            let out = '';
+            let out = '---Last 3200 frames---<br>';
+            out += 'Max latency: '+ max + '<br>';
+            out += 'Avg Latency: '+ average(timesT).toFixed(2) + '<br>';
+            out += '---Last 100 frames---<br>';
             out += 'Target Delay: '+ tDelay + '<br>';
             out += 'Actual Delay: '+ aDelay.toFixed(2) + '<br>';
-            out += 'Avg Latency: '+ (aDelay - tDelay).toFixed(2) + ' (last 100 frames) <br>';
+            out += 'Avg Latency: '+ (aDelay - tDelay).toFixed(2) + '<br>';
             out += '-------<br>';
             out += 'VALUES: <br>';
             for (let i = 0; i <= split.length - 2; i++) {
