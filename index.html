@@ -142,7 +142,7 @@
             let out = '';
             out += 'Target Delay: '+ tDelay + '<br>';
             out += 'Actual Delay: '+ aDelay.toFixed(2) + '<br>';
-            out += 'Latency: '+ (aDelay - tDelay).toFixed(2) + '<br>';
+            out += 'Avg Latency: '+ (aDelay - tDelay).toFixed(2) + ' (last 100 frames) <br>';
             out += '-------<br>';
             out += 'VALUES: <br>';
             for (let i = 0; i <= split.length - 2; i++) {
