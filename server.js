@@ -41,12 +41,13 @@ wss.on('connection', (ws) => {
     function F(timeout) {
             if (tOpts.run) {
             let sines = [];
+            const now = Date.now();
             for (let i = 0; i < tOpts.size; i++) {
                 const div = 100 * (i + 1);
-                sines.push(Math.sin(Date.now()/div))
+                sines.push(Math.sin(now / div))
             }
             ws.send('sine_' + sines.join('_'));
-            ws.send('date_'+Date.now());
+            ws.send('date_' + now);
         }
         setTimeout(()=>{
             F(tOpts.delay);
