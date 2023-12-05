@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+</head>
+
+<body>
+    <h2>MULTITOUCH TEST</h2>
+    <button id="button1" class="touch-button">A</button>
+    <button id="button2" class="touch-button">B</button>
+    <br>
+    <button id="button3" class="touch-button">C</button>
+    <button id="button4" class="touch-button">D</button>
+    <hr>
+
+    <h2>ROUND TRIP LATENCY TEST</h2>
+    <p>
+        Click the "LATENCY TEST" button below to run a round trip latency test.<br>
+        The last time and avg time will be displayed below in MILLISECONDS.<br><br>
+        The output area will change color while we await a reply but that usually happens too fast to see.
+    </p>
+    <button id="buttonL" class="touch-button small">LATENCY TEST</button>
+    <br>
+    <div id="lTest" class="lTest">test results</div>
+    <hr>
+
+    <h2>ONE WAY LATENCY TEST</h2>
+    <p>
+        The server will send messages every 'Delay' milliseconds with data for 'Size' sine waves.<br><br>
+        Each sine wave will be rendered as an animation below. <br><br>
+        All animation (sine wave) data is coming directly from the server frame by frame.<br><br>
+        Any lack of smoothness is caused by latency spikes. There is no buffer or interpolation logic.<br><br>
+        <br><br><br>
+        A higher 'Size' value will (of course) cause more lag. <br><br>
+        The lower the 'Delay' value the smoother the animation (more FPS).<br><br>
+        A `Delay` value which is too low can ADD latency as the system struggles to process the volume of incoming messages.<br><br>
+    </p>
+    <div class="tOpts">
+        <!-- Run throughput tests--<input id="tOpts_run" type="checkbox" checked> <br> -->
+        Size---<input id="tOpts_size" type="number" value="24"> <br>
+        Delay--<input id="tOpts_delay" type="number" value="16"> <br>
+        <button id="button_tOpts_start" class="touch-button small">START</button> <br>
+        <button id="button_tOpts_stop" class="touch-button small">STOP</button> <br>
+    </div>
+    <canvas id="myCanvas" class="canvas" width="512" height="512"></canvas>
+    <br>
+    <div id="tTest" class="tTest">tTest</div>
+    <br>
+    <p>
+        Below we have the server time as reported by the server compared to the local time reported by the browser.
+    </p>
+    <div id="tTest2" class="tTest">tTest2</div>
+    <hr>
+    <script src="script.js"></script>
+</body>
+<script>
+    //
+    // Utilities
+    //
+    function startTimer() {
+        lastTime = Date.now(); // Start our new trip timer
+    }
+    // Calculate the round trip time in ms
+    function calcTime() {
+        lastTime = Date.now() - lastTime;
+        // Push to the time tracker and get the running avg
+        times.push(lastTime);
+        const avg = average(times).toFixed(2);
+        // Update the tracker text and remove the loading class
+        lTest.innerHTML = "last: " + lastTime + " avg:" + avg;
+    }
+    // Array avg reducer
+    const average = array => array.reduce((a, b) => a + b) / array.length;
+
+    //
+    // WEB SOCKET STUFF
+    //
+    const WS_IP = 'localhost'; // Replace with target IP
+    let wsReady = false; // Tracks if the WS connections has opened
+    let lastTime = 999; // Tracks the last time it took for a round trip WS message
+    let times = []; // Holds an array of times used for creating an average
+    // Create a new WebSocket connection
+    var ws = new WebSocket('ws://' + WS_IP + ':9090');
+
+    // Find our test visualization elements
+    const lTest = document.getElementById('lTest');
+    const tTest = document.getElementById('tTest');
+    const tTest2 = document.getElementById('tTest2');
+
+    const canvas = document.getElementById('myCanvas');
+    const ctx = canvas.getContext("2d");
+    // const canvas2 = document.getElementById('myCanvas2');
+    // const ctx2 = canvas2.getContext("2d");
+
+    // When the connection is open, set wsReady to true
+    ws.onopen = function () {
+        wsReady = true;
+    };
+
+    let frame = 0;
+    let lastTimeT = Date.now();
+    let aDelay = 0;
+    // When a message is received from the server
+    ws.onmessage = function (event) {
+        if (event.data === 'pong') {
+            calcTime();
+            lTest.classList.remove('lTestLoading');
+        }
+        if (event.data.includes('sine')) {
+            const split = event.data.split('_');
+
+            // Multi canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i <= split.length; i++) {
+                const val = split[i + 1];
+                let pos = (canvas.width / 2) * val;
+                pos = (canvas.width / 2) + pos;
+                // Canvas
+                const size = canvas.height / split.length / 2;
+                ctx.beginPath();
+                ctx.arc(pos, i * (size * 2) + size, size, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            // Draw center crossing
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            frame++;
+            // Update FPS every 100 frames
+            if (frame === 100) {
+                frame = 0;
+                const now = Date.now();
+                aDelay = (now - lastTimeT) / 100;
+                lastTimeT = now;
+            }
+            const tDelay = parseFloat(document.getElementById('tOpts_delay').value);
+            // Text output
+            let out = '';
+            out += 'Target Delay: '+ tDelay + '<br>';
+            out += 'Actual Delay: '+ aDelay.toFixed(2) + '<br>';
+            out += 'Latency: '+ (aDelay - tDelay).toFixed(2) + '<br>';
+            out += '-------<br>';
+            out += 'VALUES: <br>';
+            for (let i = 0; i <= split.length - 2; i++) {
+                out += split[i + 1] + '<br>';
+            }
+            tTest.innerHTML = out;
+        }
+        if (event.data.includes('date')) {
+            const val = event.data.split('_')[1];
+            tTest2.innerHTML = 'Server Time--' + val + '<br>Local Time---' + Date.now() + '<br> ms since unix epoch';
+        }
+    };
+
+    // When the connection is closed
+    ws.onclose = function () {
+        alert('Disconnected from server');
+    };
+
+    // When there is an error
+    ws.onerror = function (error) {
+        alert('Error occurred: ' + error.message);
+    };
+
+    // Sends the ping message to the WS if its open
+    function sendPing() {
+        if (!wsReady) {
+            alert("WEB SOCKET CONNECTION NOT READY!");
+            return;
+        }
+        ws.send('ping');
+    }
+    function sendtOpts() {
+        if (!wsReady) {
+            alert("WEB SOCKET CONNECTION NOT READY!");
+            return;
+        }
+        //const run = document.getElementById('tOpts_run').checked ? 1 : 0;
+        //console.log('run' + run);
+        const size = document.getElementById('tOpts_size').value;
+        const delay = document.getElementById('tOpts_delay').value;
+        ws.send('topts_' + size + '_' + delay);
+    }
+
+    function stopT() {
+        if (!wsReady) {
+            alert("WEB SOCKET CONNECTION NOT READY!");
+            return;
+        }
+        ws.send('topts_stop');
+    }
+
+    //
+    // UI STUFF
+    //
+    window.addEventListener('DOMContentLoaded', (event) => {
+        // Find our target button elements
+        // Key should match button HTML id
+        const buttons = {
+            button1: document.getElementById('button1'),
+            button2: document.getElementById('button2'),
+            button3: document.getElementById('button3'),
+            button4: document.getElementById('button4'),
+            buttonL: document.getElementById('buttonL'),
+            button_tOpts_start: document.getElementById('button_tOpts_start'),
+            button_tOpts_stop: document.getElementById('button_tOpts_stop')
+        }
+
+        // BUTTON SETUP
+        // We must use touchstart and touchend to track button presses if we want multitouch capabilities
+        // These are events do not register mouse clicks at all
+        // The event.preventDefault method is called to prevent the default button actions which are being overwritten here
+
+        // Basic logic for button press DOWN (shared by mouse and touch)
+        function bDown(name, event) {
+            event.preventDefault();
+            const btn = buttons[name];
+            btn.classList.add('highlight');
+        }
+        // Basic logic for button release UP (shared by mouse and touch)
+        function bUp(name, event) {
+            event.preventDefault();
+            const btn = buttons[name];
+            btn.classList.remove('highlight');
+        }
+
+        // Adds a DOWN listener to target button for both mouse and touch
+        function addDown(target, name) {
+            target.addEventListener('touchstart', function (e) {
+                bDown(name, e);
+            }, false);
+            target.addEventListener('mousedown', function (e) {
+                bDown(name, e);
+            }, false);
+        }
+
+        // Adds an UP listener to target button for both mouse and touch
+        function addUp(target, name) {
+            target.addEventListener('touchend', function (e) {
+                bUp(name, e);
+            }, false);
+            target.addEventListener('mouseup', function (e) {
+                bUp(name, e);
+            }, false);
+        }
+
+        // Adds the special latency test DOWN listener to target button
+        function addLDown(target, name) {
+            function F(e) {
+
+                startTimer();
+                sendPing(); // Send the ping command to the WS 
+                bDown(name, e);
+                lTest.classList.add('lTestLoading');
+            }
+            target.addEventListener('touchstart', function (e) {
+                F(e);
+            }, false);
+            target.addEventListener('mousedown', function (e) {
+                F(e);
+            }, false);
+        }
+
+        // Adds the special throughput test DOWN listener to target button
+        function addTStartDown(target, name) {
+            function F(e) {
+                sendtOpts();
+                bDown(name, e);
+            }
+            target.addEventListener('touchstart', function (e) {
+                F(e);
+            }, false);
+            target.addEventListener('mousedown', function (e) {
+                F(e);
+            }, false);
+        }
+        // Adds the special throughput test DOWN listener to target button
+        function addTStopDown(target, name) {
+            function F(e) {
+                stopT();
+                bDown(name, e);
+            }
+            target.addEventListener('touchstart', function (e) {
+                F(e);
+            }, false);
+            target.addEventListener('mousedown', function (e) {
+                F(e);
+            }, false);
+        }
+
+        // Setup button listeners
+        // Name should match button HTML id
+        addDown(buttons.button1, 'button1');
+        addUp(buttons.button1, 'button1');
+        addDown(buttons.button2, 'button2');
+        addUp(buttons.button2, 'button2');
+        addDown(buttons.button3, 'button3');
+        addUp(buttons.button3, 'button3');
+        addDown(buttons.button4, 'button4');
+        addUp(buttons.button4, 'button4');
+
+        addTStartDown(buttons.button_tOpts_start, 'button_tOpts_start');
+        addUp(buttons.button_tOpts_start, 'button_tOpts_start');
+        addTStopDown(buttons.button_tOpts_stop, 'button_tOpts_stop');
+        addUp(buttons.button_tOpts_stop, 'button_tOpts_stop');
+
+        addLDown(buttons.buttonL, 'buttonL');
+        addUp(buttons.buttonL, 'buttonL');
+
+    });
+</script>
+<style>
+    html {
+        background-color: rgb(38, 38, 38);
+        color: white;
+        text-align: center;
+        font-family: 'Courier New', Courier, monospace;
+    }
+
+    body {
+        padding: 0;
+        margin: 0;
+    }
+
+    h2 {
+        font-size: 3.5rem;
+        background: dimgray;
+        margin: 0;
+    }
+
+    p {
+        min-width: 44vw;
+        max-width: 600px;
+        background: rgba(0, 0, 0, 0.5);
+        margin: 0.5rem auto;
+        padding: 0.5rem;
+        text-align: left;
+    }
+
+    .touch-button {
+        min-width: 45vw;
+        min-height: 15vw;
+        font-size: 3rem;
+        padding: 10px;
+        font-family: 'Courier New', Courier, monospace;
+    }
+
+    .small {
+        min-width: 45vw;
+        min-height: 5vw;
+        font-size: 1.5rem;
+        padding: 10px;
+    }
+
+    .lTest {
+        display: inline-block;
+        width: 43vw;
+        padding: 1rem;
+        background-color: black;
+        font-size: 2.5rem;
+    }
+
+    .lTestLoading {
+        background-color: red;
+    }
+
+    .highlight {
+        background-color: red;
+        color: white;
+    }
+
+    .canvas {
+        background: red;
+    }
+
+    .tOpts {
+        font-size: 3rem;
+        text-align: left;
+        min-width: 44vw;
+        max-width: 600px;
+        margin:0 auto;
+    }
+
+    .tOpts input {
+        font-size: 3rem;
+        max-width: 25vw;
+    }
+
+    .tOpts input[type="checkbox"] {
+        width: 2.5vw;
+        height: 2.5vw
+    }
+</style>
+
+</html>
