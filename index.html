@@ -45,7 +45,8 @@
     </div>
     <canvas id="myCanvas" class="canvas" width="512" height="512"></canvas>
     <br>
-    <canvas id="myCanvas2" class="canvas" width="512" height="128"></canvas>
+    Latency Meter: <br>
+    <canvas id="myCanvas2" class="canvas2" width="512" height="128"></canvas>
     <br>
     <div id="tTest" class="tTest">tTest</div>
     <br>
@@ -150,7 +151,8 @@
             // Bar graph
             var max = Math.max(...timesT);
             var min = Math.min(...timesT);
-            var scale = (canvas2.height / (max - min));
+            const range = Math.abs(max - min);
+            var scale = (canvas2.height / range);
             var barWidth = canvas2.width / 32;
             ctx2.clearRect(0,0, canvas2.width, canvas2.height);
             ctx2.fillStyle = '#4285F4';
@@ -160,9 +162,12 @@
             }
             
             // Text output
+            let bigAvg = timesT.length > 0 ? average(timesT).toFixed(2) : 0;
             let out = '---Last 3200 frames---<br>';
-            out += 'Max latency: '+ max + '<br>';
-            out += 'Avg Latency: '+ average(timesT).toFixed(2) + '<br>';
+            out += 'Max delay: '+ max.toFixed(2) + '<br>';
+            out += 'Min delay: '+ min.toFixed(2) + '<br>';
+            out += 'Range: '+ range.toFixed(2) + '<br>';
+            out += 'Avg Delay: '+ bigAvg + '<br>';
             out += '---Last 100 frames---<br>';
             out += 'Target Delay: '+ tDelay + '<br>';
             out += 'Actual Delay: '+ aDelay.toFixed(2) + '<br>';
@@ -339,7 +344,7 @@
 </script>
 <style>
     html {
-        background-color: rgb(38, 38, 38);
+        background-color: rgb(35, 35, 35);
         color: white;
         text-align: center;
         font-family: 'Courier New', Courier, monospace;
@@ -399,6 +404,10 @@
 
     .canvas {
         background: red;
+    }
+
+    .canvas2 {
+        background: black;
     }
 
     .tOpts {
